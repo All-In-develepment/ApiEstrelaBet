@@ -6,89 +6,144 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
-# Configurar o WebDriver do Edge
-service = Service(EdgeChromiumDriverManager().install())
+# Função para configurar o WebDriver
+def setup_driver():
+    service = Service(EdgeChromiumDriverManager().install())
+    driver = webdriver.Edge(service=service)
+    driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': """
+    Element.prototype._attachShadow = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function () {
+        return this._attachShadow( { mode: "open" } );
+    };
+    """})
+    return driver
 
-driver = webdriver.Edge(service=service)
-driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': """
-Element.prototype._attachShadow = Element.prototype.attachShadow;
-Element.prototype.attachShadow = function () {
-    return this._attachShadow( { mode: "open" } );
-};
-"""})
-driver.get('https://estrelabet.com/pb#/virtual')
+# Função para aceitar os cookies
+def accept_cookies(driver):
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'body > app-root > div:nth-child(2) > app-cookie-policy > div > div > div > span > button')))
+        accept_button = driver.find_element(By.CSS_SELECTOR, 'body > app-root > div:nth-child(2) > app-cookie-policy > div > div > div > span > button')
+        driver.execute_script("arguments[0].click();", accept_button)
+        print("Botão de aceitação de cookies clicado.")
+        time.sleep(3)
+    except Exception as e:
+        print(f"Erro ao clicar no botão de aceitação de cookies: {e}")
 
-# Aceitar os Cookies
-try:
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'body > app-root > div:nth-child(2) > app-cookie-policy > div > div > div > span > button')))
-    accept_button = driver.find_element(By.CSS_SELECTOR, 'body > app-root > div:nth-child(2) > app-cookie-policy > div > div > div > span > button')
-    driver.execute_script("arguments[0].click();", accept_button)
-    print("Botão de aceitação de cookies clicado.")
-    time.sleep(3)
-except Exception as e:
-    print(f"Erro ao clicar no botão de aceitação de cookies: {e}")
+# Função para obter o Shadow DOM
+def get_shadow_root(driver):
+    shadow_host = driver.find_element(By.CSS_SELECTOR, '#container > div')
+    shadow_root = driver.execute_script('return arguments[0].shadowRoot', shadow_host)
+    return shadow_root
 
-# Localizar o host do Shadow DOM
-shadow_host = driver.find_element(By.CSS_SELECTOR, '#container > div')
-shadow_root = driver.execute_script('return arguments[0].shadowRoot', shadow_host)
+# Função para capturar dados de uma partida
+def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
+    print(f"\nResultados para o ID {game_id} e times {game_teams}:")
+    
+    shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0 > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7 > div')
 
-shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0 > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7 > div')
+    # Processar resultados
+    child_elements = shadow_host2.find_elements(By.CLASS_NAME, 'Kironstyled__EventDataContainer-sc-jvy8h9-5')
 
-child_elements = shadow_host2.find_elements(By.CLASS_NAME, 'Kironstyled__EventDataContainer-sc-jvy8h9-5')
+    for game in child_elements:
+        game_columns = game.find_elements(By.CLASS_NAME, 'Kironstyled__EventData-sc-jvy8h9-3')
+        for col in game_columns:
+            if col.text == 'Resultados':
+                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", col)
+                WebDriverWait(driver, 10).until(EC.visibility_of(col))
+                driver.execute_script("arguments[0].click();", col)
+                time.sleep(4)
 
-for game in child_elements:
-    game_columns = game.find_elements(By.CLASS_NAME, 'Kironstyled__EventData-sc-jvy8h9-3')
-    for col in game_columns:
-        if col.text == 'Resultados':
-            # Rolando até o elemento 'Resultados'
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", col)
-            WebDriverWait(driver, 10).until(EC.visibility_of(col))
-            driver.execute_script("arguments[0].click();", col)
-            time.sleep(4)
+                shadow_host3 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1.dYeXtu > div.EventDetailsMarketsstyled__EventDetailsMarketsContainer-sc-qy9han-0.bYqefA')
 
-            # Encontrar o container de detalhes do evento dentro do Shadow DOM
-            shadow_host3 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1.dYeXtu > div.EventDetailsMarketsstyled__EventDetailsMarketsContainer-sc-qy9han-0.bYqefA')
+                try:
+                    exact_results_button = WebDriverWait(shadow_host3, 20).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(8) > div > div > div.EventDetailsMarketBoxstyled__IconsWrapper-sc-p3o2rl-7.ijUPWY > svg'))
+                    )
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", exact_results_button)
+                    WebDriverWait(driver, 10).until(EC.visibility_of(exact_results_button))
+                    driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", exact_results_button)
+                    time.sleep(8)
 
-            # Rolando até o botão 'Resultado Exato' dentro do Shadow DOM
-            try:
-                exact_results_button = WebDriverWait(shadow_host3, 20).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(8) > div > div > div.EventDetailsMarketBoxstyled__IconsWrapper-sc-p3o2rl-7.ijUPWY > svg'))
-                )
-                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", exact_results_button)
-                WebDriverWait(driver, 10).until(EC.visibility_of(exact_results_button))
-                driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", exact_results_button)
-                time.sleep(8)  # Aguarde o carregamento da lista de resultados
+                    for _ in range(3):
+                        driver.execute_script("window.scrollBy(0, window.innerHeight);")
+                        time.sleep(4)
 
-                # Rolagem para baixo 3 vezes
-                for _ in range(3):
-                    driver.execute_script("window.scrollBy(0, window.innerHeight);")
-                    time.sleep(4)  # Tempo para carregar mais resultados
+                    last_height = driver.execute_script("return document.body.scrollHeight")
 
-                last_height = driver.execute_script("return document.body.scrollHeight")
+                    while True:
+                        result_elements = shadow_host3.find_elements(By.CSS_SELECTOR, 'div.EventDetailsMarketBoxstyled__EventDetailsMarketWrapperBase-sc-p3o2rl-0.iRpoal > div > div > button.OddBoxVariant0styled__OddBoxButton-sc-1ypym0p-4.copbbS > div > div.OddBoxVariant0styled__OddLabelContent-sc-1ypym0p-0.ejAbYs > span')
 
-                while True:
-                    # Encontre todos os resultados
-                    result_elements = shadow_host3.find_elements(By.CSS_SELECTOR, 'div.EventDetailsMarketBoxstyled__EventDetailsMarketWrapperBase-sc-p3o2rl-0.iRpoal > div > div > button.OddBoxVariant0styled__OddBoxButton-sc-1ypym0p-4.copbbS > div > div.OddBoxVariant0styled__OddLabelContent-sc-1ypym0p-0.ejAbYs > span')
-                    print(f"Número de elementos de resultado encontrados: {len(result_elements)}")
-                    if not result_elements:
-                        break
+                        if not result_elements:
+                            break
 
-                    # Verificar se os resultados têm a cor de fundo verde
-                    for result in result_elements:
-                        parent = result.find_element(By.XPATH, '..')
-                        background_color = driver.execute_script("return window.getComputedStyle(arguments[0]).backgroundColor;", parent)
-                        print(f"Elemento: {result.text}, Background color: {background_color}")
-                        if background_color == 'rgb(77, 177, 79)':  # Cor verde identificada
-                            print('Resultado exato correto:', result.text)
+                        for result in result_elements:
+                            # Print the result text directly
+                            print(f"Resultado encontrado: {result.text}")
 
-                    # Rolagem
-                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                    time.sleep(2)  # Tempo para carregar mais resultados
+                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(2)
 
-                    new_height = driver.execute_script("return document.body.scrollHeight")
-                    if new_height == last_height:
-                        break
-                    last_height = new_height
+                        new_height = driver.execute_script("return document.body.scrollHeight")
+                        if new_height == last_height:
+                            break
+                        last_height = new_height
 
-            except Exception as e:
-                print(f"Erro ao encontrar ou clicar em 'Resultado Exato': {e}")
+                except Exception as e:
+                    print(f"Erro ao encontrar ou clicar em 'Resultado Exato': {e}")
+
+# Função principal
+def main():
+    driver = setup_driver()
+    driver.get('https://estrelabet.com/pb#/virtual')
+
+    accept_cookies(driver)
+    shadow_root = get_shadow_root(driver)
+
+    # Captura de dados do primeiro ID
+    try:
+        shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7.cUhgrY > div')
+
+        first_game_id_element = WebDriverWait(shadow_host2, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(1) > div:nth-child(2)'))
+        )
+        first_game_id = first_game_id_element.text
+
+        first_game_teams_element = shadow_host2.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.Kironstyled__EventData-sc-jvy8h9-3.Kironstyled__EventName-sc-jvy8h9-4.eiCTSg.kzvlWP')
+        first_game_teams = first_game_teams_element.text
+
+        print(f"Primeiro ID da partida encontrado: {first_game_id}")
+        print(f"Times do primeiro ID: {first_game_teams}")
+
+        capture_game_data(driver, shadow_root, "primeiro", first_game_id, first_game_teams)
+    except Exception as e:
+        print(f"Erro ao capturar dados do primeiro ID: {e}")
+
+    # Atualiza a página para capturar dados do segundo ID
+    driver.get('https://estrelabet.com/pb#/virtual')
+    time.sleep(5)
+    accept_cookies(driver)
+    shadow_root = get_shadow_root(driver)
+
+    try:
+        shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7.cUhgrY > div')
+
+        second_game_id_element = WebDriverWait(shadow_host2, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(2) > div:nth-child(2)'))
+        )
+        second_game_id = second_game_id_element.text
+
+        second_game_teams_element = shadow_host2.find_element(By.CSS_SELECTOR, 'div:nth-child(2) > div.Kironstyled__EventData-sc-jvy8h9-3.Kironstyled__EventName-sc-jvy8h9-4.eiCTSg.kzvlWP')
+        second_game_teams = second_game_teams_element.text
+
+        print(f"Segundo ID da partida encontrado: {second_game_id}")
+        print(f"Times do segundo ID: {second_game_teams}")
+
+        capture_game_data(driver, shadow_root, "segundo", second_game_id, second_game_teams)
+    except Exception as e:
+        print(f"Erro ao capturar dados do segundo ID: {e}")
+
+    # Fechar o navegador
+    driver.quit()
+
+if __name__ == "__main__":
+    main()
