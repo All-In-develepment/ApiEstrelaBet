@@ -53,15 +53,16 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
                 driver.execute_script("arguments[0].click();", col)
                 time.sleep(4)
 
+                # Novo seletor para "Número Exato de Gols"
                 shadow_host3 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1.dYeXtu > div.EventDetailsMarketsstyled__EventDetailsMarketsContainer-sc-qy9han-0.bYqefA')
 
                 try:
-                    exact_results_button = WebDriverWait(shadow_host3, 20).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(8) > div > div > div.EventDetailsMarketBoxstyled__IconsWrapper-sc-p3o2rl-7.ijUPWY > svg'))
+                    exact_goals_button = WebDriverWait(shadow_host3, 20).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(7) > div > div > div.EventDetailsMarketBoxstyled__IconsWrapper-sc-p3o2rl-7.ijUPWY > svg'))
                     )
-                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", exact_results_button)
-                    WebDriverWait(driver, 10).until(EC.visibility_of(exact_results_button))
-                    driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", exact_results_button)
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", exact_goals_button)
+                    WebDriverWait(driver, 10).until(EC.visibility_of(exact_goals_button))
+                    driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", exact_goals_button)
                     time.sleep(8)
 
                     for _ in range(3):
@@ -77,7 +78,6 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
                             break
 
                         for result in result_elements:
-                            # Print the result text directly
                             print(f"Resultado encontrado: {result.text}")
 
                         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -89,7 +89,7 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
                         last_height = new_height
 
                 except Exception as e:
-                    print(f"Erro ao encontrar ou clicar em 'Resultado Exato': {e}")
+                    print(f"Erro ao encontrar ou clicar em 'Número Exato de Gols': {e}")
 
 # Função principal
 def main():
@@ -117,30 +117,6 @@ def main():
         capture_game_data(driver, shadow_root, "primeiro", first_game_id, first_game_teams)
     except Exception as e:
         print(f"Erro ao capturar dados do primeiro ID: {e}")
-
-    # Atualiza a página para capturar dados do segundo ID
-    driver.get('https://estrelabet.com/pb#/virtual')
-    time.sleep(5)
-    accept_cookies(driver)
-    shadow_root = get_shadow_root(driver)
-
-    try:
-        shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7.cUhgrY > div')
-
-        second_game_id_element = WebDriverWait(shadow_host2, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(2) > div:nth-child(2)'))
-        )
-        second_game_id = second_game_id_element.text
-
-        second_game_teams_element = shadow_host2.find_element(By.CSS_SELECTOR, 'div:nth-child(2) > div.Kironstyled__EventData-sc-jvy8h9-3.Kironstyled__EventName-sc-jvy8h9-4.eiCTSg.kzvlWP')
-        second_game_teams = second_game_teams_element.text
-
-        print(f"Segundo ID da partida encontrado: {second_game_id}")
-        print(f"Times do segundo ID: {second_game_teams}")
-
-        capture_game_data(driver, shadow_root, "segundo", second_game_id, second_game_teams)
-    except Exception as e:
-        print(f"Erro ao capturar dados do segundo ID: {e}")
 
     # Fechar o navegador
     driver.quit()
