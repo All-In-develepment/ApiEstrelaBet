@@ -5,6 +5,7 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+from mongo_connection import conectar_mongo, inserir_dados_no_mongo  # Importar funções para MongoDB
 
 # Função para configurar o WebDriver
 def setup_driver():
@@ -35,10 +36,10 @@ def get_shadow_root(driver):
     shadow_root = driver.execute_script('return arguments[0].shadowRoot', shadow_host)
     return shadow_root
 
-# Função para capturar dados de uma partida
-def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
-    print(f"\nResultados para o ID {game_id} e times {game_teams}:")
-    
+# Função para capturar o ID da partida, times que jogaram, time que ganhou, e quantidade de gols
+def capture_game_data(driver, shadow_root, game_id, game_teams):
+    print(f"\nCapturando dados para o ID {game_id} e times {game_teams}:")
+
     shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0 > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7 > div')
 
     # Processar resultados
@@ -53,7 +54,6 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
                 driver.execute_script("arguments[0].click();", col)
                 time.sleep(4)
 
-                # Novo seletor para "Número Exato de Gols"
                 shadow_host3 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1.dYeXtu > div.EventDetailsMarketsstyled__EventDetailsMarketsContainer-sc-qy9han-0.bYqefA')
 
                 try:
@@ -65,10 +65,6 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
                     driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", exact_goals_button)
                     time.sleep(8)
 
-                    for _ in range(3):
-                        driver.execute_script("window.scrollBy(0, window.innerHeight);")
-                        time.sleep(4)
-
                     last_height = driver.execute_script("return document.body.scrollHeight")
 
                     while True:
@@ -78,7 +74,14 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
                             break
 
                         for result in result_elements:
-                            print(f"Resultado encontrado: {result.text}")
+                            result_text = result.text
+                            print(f"Resultado encontrado: {result_text}")
+
+                            # Conectar ao MongoDB
+                            db = conectar_mongo()
+
+                            # Inserir os dados capturados no MongoDB
+                            inserir_dados_no_mongo(db, game_id, game_teams, result_text)
 
                         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                         time.sleep(2)
@@ -93,33 +96,37 @@ def capture_game_data(driver, shadow_root, game_number, game_id, game_teams):
 
 # Função principal
 def main():
-    driver = setup_driver()
-    driver.get('https://estrelabet.com/pb#/virtual')
+    last_game_ids = set()
+    while True:
+        driver = setup_driver()
+        driver.get('https://estrelabet.com/pb/esportes#/virtual')
 
-    accept_cookies(driver)
-    shadow_root = get_shadow_root(driver)
+        accept_cookies(driver)
+        shadow_root = get_shadow_root(driver)
 
-    # Captura de dados do primeiro ID
-    try:
-        shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7.cUhgrY > div')
+        try:
+            shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0.fHjhfY > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7.cUhgrY > div')
 
-        first_game_id_element = WebDriverWait(shadow_host2, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'div:nth-child(1) > div:nth-child(2)'))
-        )
-        first_game_id = first_game_id_element.text
+            game_elements = shadow_host2.find_elements(By.CSS_SELECTOR, 'div.Kironstyled__EventDataContainer-sc-jvy8h9-5')
+            for game_element in game_elements:
+                game_id = game_element.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div:nth-child(2)').text
+                game_teams = game_element.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.Kironstyled__EventData-sc-jvy8h9-3.Kironstyled__EventName-sc-jvy8h9-4.eiCTSg.kzvlWP').text
 
-        first_game_teams_element = shadow_host2.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.Kironstyled__EventData-sc-jvy8h9-3.Kironstyled__EventName-sc-jvy8h9-4.eiCTSg.kzvlWP')
-        first_game_teams = first_game_teams_element.text
+                if game_id not in last_game_ids:
+                    last_game_ids.add(game_id)
+                    capture_game_data(driver, shadow_root, game_id, game_teams)
+                    
+                    # Sai do loop para evitar múltiplos IDs no mesmo ciclo de scraping
+                    break
+        
+        except Exception as e:
+            print(f"Erro ao capturar dados: {e}")
 
-        print(f"Primeiro ID da partida encontrado: {first_game_id}")
-        print(f"Times do primeiro ID: {first_game_teams}")
+        finally:
+            driver.quit()
 
-        capture_game_data(driver, shadow_root, "primeiro", first_game_id, first_game_teams)
-    except Exception as e:
-        print(f"Erro ao capturar dados do primeiro ID: {e}")
-
-    # Fechar o navegador
-    driver.quit()
+        # Intervalo antes de reiniciar o loop
+        time.sleep(60)  # Ajuste o intervalo para corresponder à duração média dos jogos
 
 if __name__ == "__main__":
     main()
