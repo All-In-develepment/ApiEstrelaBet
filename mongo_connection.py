@@ -3,7 +3,7 @@ from pymongo import MongoClient
 # Função para conectar ao MongoDB
 def conectar_mongo():
     # Conectar ao MongoDB
-    client = MongoClient('mongodb://localhost:27017/')
+    client = MongoClient('mongodb://admin:MyMongoL0ideDB!!@201.76.43.147:27017/mongo?authSource=admin')
     db = client['mongodb']  # Nome do banco de dados
     return db
 
