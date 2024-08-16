@@ -1,44 +1,33 @@
-from flask import Flask, request, jsonify
-import os
-from pymongo import MongoClient
-from dotenv import load_dotenv
-
-
-env_path = os.path.join(os.path.dirname(os.path.dirname('app.py')), '.env')
-load_dotenv(dotenv_path=env_path)
+from flask import Flask, jsonify, request
+from mongo_connection import conectar_mongo
 
 app = Flask(__name__)
 
-mongo_uri = os.getenv('MONGO_URI')
-mongo_name = os.getenv('MONGO_NAME')
-flask_port = os.getenv('FLASK_PORT')
-
 # Conectar ao MongoDB
-client = MongoClient(mongo_uri)
-db = client.mongo_name
-collection = db.clients
+db = conectar_mongo()
 
-@app.route('/addClient', methods=['POST'])
-def add_client():
-    data = request.json
-    
-    name = data.get('name')
-    token = data.get('token')
-    affiliate = data.get('affiliate')
-    status = data.get('status')
-    
-    if name and token and affiliate and status is not None:
-      response = {
-              "name": name,
-              "token": token,
-              "affiliate": affiliate,
-              "status": status
-          }
-      collection.insert_one(response)
-    
-      return jsonify({"status": "cliente adicionado"}), 201
-    else:
-        return jsonify({"error": "dados incompletos"}), 400
+@app.route('/api/partidas', methods=['GET'])
+def get_partidas():
+    partidas = db['partidas'].find()
+    result = []
+    for partida in partidas:
+        result.append({
+            'id_partida': partida['id_partida'],
+            'times_que_jogaram': partida['times_que_jogaram'],
+            'resultado': partida['resultado']
+        })
+    return jsonify(result)
+
+@app.route('/api/partidas', methods=['POST'])
+def add_partida():
+    data = request.get_json()
+    partida = {
+        'id_partida': data['id_partida'],
+        'times_que_jogaram': data['times_que_jogaram'],
+        'resultado': data['resultado']
+    }
+    db['partidas'].insert_one(partida)
+    return jsonify({'msg': 'Partida adicionada com sucesso!'}), 201
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=flask_port)
+    app.run(debug=True)
