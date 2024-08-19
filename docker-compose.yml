@@ -5,18 +5,23 @@ services:
     image: mongo:5.0
     container_name: mongodb
     restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ADMIN}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
     ports:
-      - "27017:27017"  # Mapear a porta do MongoDB para o host
+      - "${MONGO_PORT}:27017" # Mapear a porta do MongoDB para o host
     volumes:
       - mongo_data:/data/db  # Persistir dados do MongoDB em um volume
 
   flask-api:
-    build: .
+    build: ./api
     container_name: flask-api
     ports:
       - "5000:5000"
     depends_on:
       - mongo
+    volumes:
+      - ./api/.:/app
 
 volumes:
   mongo_data:  # Volume para armazenar os dados
