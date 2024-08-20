@@ -5,9 +5,10 @@ from webdriver_manager.microsoft import EdgeChromiumDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
-from mongo_connection import conectar_mongo, inserir_dados_no_mongo  # Importar funções para MongoDB
+from mongo_connection import conectar_mongo, inserir_dados_no_mongo
+from datetime import datetime , timedelta
+import ipdb
 
-# Função para configurar o WebDriver
 def setup_driver():
     service = Service(EdgeChromiumDriverManager().install())
     driver = webdriver.Edge(service=service)
@@ -19,7 +20,6 @@ def setup_driver():
     """})
     return driver
 
-# Função para aceitar os cookies
 def accept_cookies(driver):
     try:
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, 'body > app-root > div:nth-child(2) > app-cookie-policy > div > div > div > span > button')))
@@ -30,21 +30,18 @@ def accept_cookies(driver):
     except Exception as e:
         print(f"Erro ao clicar no botão de aceitação de cookies: {e}")
 
-# Função para obter o Shadow DOM
 def get_shadow_root(driver):
     shadow_host = driver.find_element(By.CSS_SELECTOR, '#container > div')
     shadow_root = driver.execute_script('return arguments[0].shadowRoot', shadow_host)
     return shadow_root
 
-# Função para capturar o ID da partida, times que jogaram, time que ganhou, e quantidade de gols
 def capture_game_data(driver, shadow_root, game_id, game_teams):
     print(f"\nCapturando dados para o ID {game_id} e times {game_teams}:")
 
     shadow_host2 = shadow_root.find_element(By.CSS_SELECTOR, 'div:nth-child(1) > div.SportsBookRouterstyled__RoutesWrapper-sc-iwc66s-0 > main > div > div > div.Kironstyled__VirtualTableTennisContainer-sc-jvy8h9-1 > div.Kironstyled__VirtualEventListWrapper-sc-jvy8h9-7 > div')
-
-    # Processar resultados
     child_elements = shadow_host2.find_elements(By.CLASS_NAME, 'Kironstyled__EventDataContainer-sc-jvy8h9-5')
 
+    results = []
     for game in child_elements:
         game_columns = game.find_elements(By.CLASS_NAME, 'Kironstyled__EventData-sc-jvy8h9-3')
         for col in game_columns:
@@ -65,36 +62,35 @@ def capture_game_data(driver, shadow_root, game_id, game_teams):
                     driver.execute_script("arguments[0].dispatchEvent(new MouseEvent('click', {bubbles: true}));", exact_goals_button)
                     time.sleep(8)
 
-                    last_height = driver.execute_script("return document.body.scrollHeight")
+                    # last_height = driver.execute_script("return document.body.scrollHeight")
 
-                    while True:
-                        result_elements = shadow_host3.find_elements(By.CSS_SELECTOR, 'div.EventDetailsMarketBoxstyled__EventDetailsMarketWrapperBase-sc-p3o2rl-0.iRpoal > div > div > button.OddBoxVariant0styled__OddBoxButton-sc-1ypym0p-4.copbbS > div > div.OddBoxVariant0styled__OddLabelContent-sc-1ypym0p-0.ejAbYs > span')
+                    # while True:
+                    result_elements = shadow_host3.find_elements(By.CSS_SELECTOR, 'div.EventDetailsMarketBoxstyled__EventDetailsMarketWrapperBase-sc-p3o2rl-0.iRpoal > div > div > button.OddBoxVariant0styled__OddBoxButton-sc-1ypym0p-4.copbbS > div > div.OddBoxVariant0styled__OddLabelContent-sc-1ypym0p-0.ejAbYs > span')
 
-                        if not result_elements:
-                            break
-
-                        for result in result_elements:
+                    #     if not result_elements:
+                    #         break
+                    # ipdb.set_trace()          
+                    for result in result_elements:
                             result_text = result.text
                             print(f"Resultado encontrado: {result_text}")
+                            results.append(result_text)
+                           
 
-                            # Conectar ao MongoDB
-                            db = conectar_mongo()
 
-                            # Inserir os dados capturados no MongoDB
-                            inserir_dados_no_mongo(db, game_id, game_teams, result_text)
 
-                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(2)
+                    #     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    #     time.sleep(2)
 
-                        new_height = driver.execute_script("return document.body.scrollHeight")
-                        if new_height == last_height:
-                            break
-                        last_height = new_height
+                    #     new_height = driver.execute_script("return document.body.scrollHeight")
+                    #     if new_height == last_height:
+                    #         break
+                    #     last_height = new_height
 
                 except Exception as e:
                     print(f"Erro ao encontrar ou clicar em 'Número Exato de Gols': {e}")
+        if results: break
+    return results
 
-# Função principal
 def main():
     last_game_ids = set()
     while True:
@@ -114,11 +110,25 @@ def main():
 
                 if game_id not in last_game_ids:
                     last_game_ids.add(game_id)
-                    capture_game_data(driver, shadow_root, game_id, game_teams)
-                    
-                    # Sai do loop para evitar múltiplos IDs no mesmo ciclo de scraping
+                    game_results = capture_game_data(driver, shadow_root, game_id, game_teams)
+
+                     # Adicionar data e hora atual
+                    now = datetime.now()
+                    data_e_hora_atual = now.strftime("%Y-%m-%d %H:%M:%S")
+                    data_e_hora_4_min_antes = (now - timedelta(minutes=4)).strftime("%Y-%m-%d %H:%M:%S")
+                    data_e_hora_2_min_antes = (now - timedelta(minutes=2)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+
+
+                    # Conectar ao MongoDB e inserir os dados
+                    db = conectar_mongo()
+                    inserir_dados_no_mongo(db, game_id, game_teams, game_results, data_e_hora_atual, data_e_hora_4_min_antes, data_e_hora_2_min_antes)
+
+
+                    # Saia do loop para evitar múltiplos IDs no mesmo ciclo de scraping
                     break
-        
+
         except Exception as e:
             print(f"Erro ao capturar dados: {e}")
 
