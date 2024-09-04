@@ -1,51 +1,66 @@
-from flask import Flask, jsonify
-from mongo_connection_v2 import conectar_mongo
+from flask import Flask, request, jsonify
+import datetime
 import os
-from pymongo import MongoClient
-from dotenv import load_dotenv
+import json
+from bson import ObjectId
+from dotenv import load_dotenv, find_dotenv
+import mysql.connector
+
 app = Flask(__name__)
 
-load_dotenv()
+# Carregar as variáveis do arquivo .env
+_ = load_dotenv(find_dotenv())
 
+flask_port = os.getenv('FLASK_PORT')   # Porta do Flask
 
-flask_port = os.getenv('FLASK_PORT')
-mongo_uri = os.getenv('MONGO_URI')
-mongo_name = os.getenv('MONGO_NAME')
-mongo_col = os.getenv('MONGO_COLLECTION')
+## Configuração do banco de dados MySQL
+db_config = {
+    'user': os.getenv('MYSQL_USER'),
+    'password': os.getenv('MYSQL_PASSWORD'),
+    # 'host': 'localhost',  # Este é o nome do serviço no Docker Compose
+    'host': 'mysql_db',  # Este é o nome do serviço no Docker Compose
+    'database': os.getenv('MYSQL_DATABASE')
+}
 
-# Conectar ao MongoDB
-client= MongoClient(mongo_uri)
-db = client[mongo_name]  # Usar a variável de ambiente para acessar o banco de dados
-collection = db[mongo_col]
-# collection=db.mongo_col
+# Conexão com o banco de dados
+def connect_db():
+    return mysql.connector.connect(**db_config)
+
+# Função personalizada para converter ObjectId em string
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        if isinstance(o, datetime.datetime):
+            return o.isoformat()
+        return json.JSONEncoder.default(self, o)
+
+# Usando a classe JSONEncoder personalizada globalmente (opcional)
+app.json_encoder = JSONEncoder
+
+def custom_json_converter(obj):
+    if isinstance(obj, datetime.timedelta):
+        return obj.total_seconds()  # Ou use obj.days, dependendo do que for mais útil para você
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
 @app.route('/api/partidas', methods=['GET'])
 def get_partidas():
-    partidas = collection.find()
-    arr = list(partidas)
-    print(arr)
-    result = []
-    for partida in arr:
-        print(partida)
-        result.append({
-            'id_partida': partida.get('id_partida'),
-            'times_que_jogaram': partida.get('times_que_jogaram'),
-            'resultado': partida.get('resultado'),
-            'data_e_hora_atual': partida.get('data_e_hora_atual'),
-            'data_e_hora_4_min_antes': partida.get('data_e_hora_4_min_antes'),
-            'data_e_hora_2_min_antes': partida.get('data_e_hora_2_min_antes')
-        })
-    return jsonify(result)
-@app.route('/', methods=['GET'])  
-def hello_world():
-    return 'funcionou2'
-@app.route('/api/status', methods=['GET'])
-def status():
-    try:
-        # Verifica a conexão com o MongoDB
-        db.command("ping")
-        return jsonify({"status": "success", "message": "MongoDB is connected!"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    periodo = request.args.get('periodo', default=7, type=int)
+    data_busca =  datetime.datetime.now() - datetime.timedelta(days=periodo)
+    
+    # Seleciona no banco o período de partidas
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM matches WHERE match_datetime >= %s", (data_busca,))
+    partidas = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    
+    # Converter o resultado em JSON
+    partidas_json = json.dumps(partidas, default=str)
+    return jsonify(json.loads(partidas_json))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=flask_port, debug=True)

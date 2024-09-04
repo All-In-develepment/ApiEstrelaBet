@@ -1,27 +1,57 @@
-version: '3.8'
-
 services:
-  mongo:
-    image: mongo:5.0
-    container_name: mongodb
-    restart: always
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ADMIN}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "${MONGO_PORT}:27017" # Mapear a porta do MongoDB para o host
+      - "3306:3306"
     volumes:
-      - mongo_data:/data/db  # Persistir dados do MongoDB em um volume
+      - mysql_data_api_estrela:/var/lib/mysql
+    networks:
+      - api-estrela
 
-  flask-api:
-    build: ./api
-    container_name: flask-api
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: mysql_db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
-      - "5000:5000"
+      - "8081:80"
     depends_on:
-      - mongo
-    volumes:
-      - ./api/.:/app
+      - mysql
+    networks:
+      - api-estrela
+
+  populador:
+    container_name: populador
+    build: 
+      context: .
+      dockerfile: ./populador/Dockerfile
+    depends_on:
+      - mysql
+    networks:
+      - api-estrela
+
+  api-estrela:
+    container_name: api-estrela
+    build: 
+      context: .
+      dockerfile: ./api/Dockerfile
+    depends_on:
+      - mysql
+    ports:
+      - ${FLASK_PORT}:${FLASK_PORT}
+    networks:
+      - api-estrela
 
 volumes:
-  mongo_data:  # Volume para armazenar os dados
+  mysql_data_api_estrela:
+
+networks:
+  api-estrela:
+    driver: bridge

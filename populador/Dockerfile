@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expor a porta que a aplicação irá usar
-EXPOSE 5000
+# EXPOSE 5000
 
 # Comando para rodar a aplicação
-CMD ["python", "api/app.py"]
+CMD ["python", "-u", "populador/populador.py"]
