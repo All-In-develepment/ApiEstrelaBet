@@ -1,0 +1,15 @@
+version: "3"
+
+name: apiestrela
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: front-estrela
+    restart: always
+    ports:
+      - "${PORT}:3000"
+    volumes:
+      - .:/app
