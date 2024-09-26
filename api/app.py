@@ -46,13 +46,16 @@ def custom_json_converter(obj):
 @app.route('/api/partidas', methods=['GET'])
 def get_partidas():
     periodo = request.args.get('periodo', default=7, type=int)
-    data_busca =  datetime.datetime.now() - datetime.timedelta(days=periodo)
+    data_busca =  datetime.datetime.now() - datetime.timedelta(hours=periodo)
+    data_inicial_busca = datetime.datetime(data_busca.year, data_busca.month, data_busca.day, data_busca.hour, 0, 0)
     
     # Seleciona no banco o período de partidas
     conn = connect_db()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM matches WHERE match_datetime >= %s", (data_busca,))
+    print(datetime.datetime.strftime(data_inicial_busca, '%Y-%m-%d %H:%M:%S'))
+    print(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S'))
+    cursor.execute("SELECT * FROM matches WHERE match_datetime BETWEEN %s AND %s ORDER BY match_datetime DESC", (data_inicial_busca, datetime.datetime.now(),))
     partidas = cursor.fetchall()
 
     cursor.close()

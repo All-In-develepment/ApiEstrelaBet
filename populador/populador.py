@@ -47,6 +47,9 @@ def Populador():
                 cursor.execute(query_insert)
                 conn.commit()
                 print('Partida inserida com sucesso')
+            
+            else:
+                print('Partida já existe no banco de dados')
 
         cursor.close()
         conn.close()
