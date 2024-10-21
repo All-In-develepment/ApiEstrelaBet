@@ -54,6 +54,51 @@ def Populador():
         cursor.close()
         conn.close()
 
+def PapuladorBet365():
+	if __name__ == "__main__":
+		for league in range(1, 6):
+			url=f"https://bet365botwebapi20231115194435.azurewebsites.net/api/futebolvirtual?liga={league}&futuro=true&Horas=Horas3&tipoOdd=&dadosAlteracao=&filtros=&confrontos=false&hrsConfrontos=3"
+			header = {
+				'Authorization': os.getenv('TOKEN_BB_TIPS')
+			}
+			
+			resposta_bb_tips = requests.get(url, headers=header)
+			
+			# varifica se a resposta é 200
+			if resposta_bb_tips.status_code == 200:
+				conn = connect_db()
+				cursor = conn.cursor()
+				json_response = resposta_bb_tips.json()
+				try:
+					for linha in json_response['Linhas']:
+						for coluna in linha['Colunas']:
+							query_select = f"""SELECT * FROM Partida WHERE Id = "{coluna['Id']}" """
+							cursor.execute(query_select)
+							result = cursor.fetchone()
+
+							# pega a data de hoje coloca em uma variavel com a colunoa de hora e minuto
+							DateTimeInserte = datetime.datetime.now().strftime('%Y-%m-%d') + ' ' + coluna['Hora'] + ':' + coluna['Minuto']
+							
+							if result == None:
+								try:
+									query_insert = f"""INSERT INTO `Partida` (`Id`, `Horario`, `Hora`, `Minuto`, `SiglaA`, `SiglaB`, `TimeA`, `TimeB`, `Resultado`, `Resultado_FT`, `Resultado_HT`, `PrimeiroMarcar`, `UltimoMarcar`, `Vencedor_HT_FT`, `Resultado_HT_Odd`, `DateTimeInserte`) 
+	VALUES ("{coluna['Id']}", "{coluna['Horario']}", "{coluna['Hora']}", "{coluna['Minuto']}", "{coluna['SiglaA']}", "{coluna['SiglaB']}", "{coluna['TimeA']}", "{coluna['TimeB']}", "{coluna['Resultado']}", "{coluna['Resultado_FT']}", "{coluna['Resultado_HT']}", "{coluna['PrimeiroMarcar']}", "{coluna['UltimoMarcar']}", "{coluna['Vencedor_HT_FT']}", "{coluna['Resultado_HT_Odd']}", "{DateTimeInserte}")"""
+									
+									print(query_insert)
+									cursor.execute(query_insert)
+									conn.commit()
+									print('Partida inserida com sucesso')
+								except Exception as e:
+									print (f"Erro ao inserir partida: {e}")
+									continue
+							else:
+								print("Parida encontrada")
+				except Exception as e:
+					print (f"Deu um erro ai: {e}")
+			else:
+				print('Erro ao buscar partidas')
+
 while True:
-    Populador()
+    # Populador()
+    PapuladorBet365()
     time.sleep(60)
