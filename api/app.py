@@ -85,5 +85,44 @@ def get_jogos365():
     partidas_json = json.dumps(partidas, default=str)
     return jsonify(json.loads(partidas_json))
 
+# Rota para buscar partidas de um time específico
+@app.route('/api/jogos365/<team_a>/<team_b>/<quant>', methods=['GET'])
+def get_jogos_bet365_by_team_a_and_team_b(team_a, team_b, quant):
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT * FROM Partida WHERE (TimeA = %s OR TimeB = %s) AND (TimeA = %s OR TimeB = %s) ORDER BY DateTimeInserte DESC LIMIT %s", (team_a, team_a, team_b, team_b, int(quant)))
+    partidas = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    
+    for partida in partidas:
+        partida['team_home_name '] = partida['TimeA']
+        partida['team_visitor_name '] = partida['TimeB']
+    
+    # Converter o resultado em JSON
+    partidas_json = json.dumps(partidas, default=str)
+    return jsonify(json.loads(partidas_json))
+
+@app.route('/api/jogos365byteam/<team_a>/<quant>', methods=['GET'])
+def get_jogos_bet365_by_team_a(team_a, quant):
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("SELECT * FROM Partida WHERE TimeA = %s OR TimeB = %s ORDER BY DateTimeInserte DESC LIMIT %s", (team_a, team_a, int(quant)))
+    partidas = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    
+    for partida in partidas:
+        partida['team_home_name '] = partida['TimeA']
+        partida['team_visitor_name '] = partida['TimeB']
+    
+    # Converter o resultado em JSON
+    partidas_json = json.dumps(partidas, default=str)
+    return jsonify(json.loads(partidas_json))
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=flask_port, debug=True)
