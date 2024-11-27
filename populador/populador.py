@@ -100,5 +100,5 @@ def PapuladorBet365():
 
 while True:
     # Populador()
-    PapuladorBet365()
+    Populador()
     time.sleep(60)

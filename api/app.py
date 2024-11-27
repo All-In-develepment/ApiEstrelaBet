@@ -65,6 +65,28 @@ def get_partidas():
     partidas_json = json.dumps(partidas, default=str)
     return jsonify(json.loads(partidas_json))
 
+@app.route('/api/partidas/<team_a>/<team_b>/<quant>', methods=['GET'])
+def get_partidas_by_team_a_and_team_b(team_a, team_b, quant):
+    periodo = request.args.get('periodo', default=7, type=int)
+    data_busca =  datetime.datetime.now() - datetime.timedelta(hours=periodo)
+    data_inicial_busca = datetime.datetime(data_busca.year, data_busca.month, data_busca.day, data_busca.hour, 0, 0)
+    
+    # Seleciona no banco o período de partidas
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+
+    print(datetime.datetime.strftime(data_inicial_busca, '%Y-%m-%d %H:%M:%S'))
+    print(datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S'))
+    cursor.execute("SELECT * FROM matches WHERE (team_home = %s OR team_visitor = %s) AND (team_home = %s OR team_visitor = %s) ORDER BY match_datetime DESC LIMIT %s", (team_a, team_a, team_b, team_b, int(quant)))
+    partidas = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+    
+    # Converter o resultado em JSON
+    partidas_json = json.dumps(partidas, default=str)
+    return jsonify(json.loads(partidas_json))
+
 @app.route('/api/jogos365', methods=['GET'])
 def get_jogos365():
     periodo = request.args.get('periodo', default=7, type=int)
